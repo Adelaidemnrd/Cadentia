@@ -226,3 +226,74 @@ CREATE TABLE suivi_gifting (
     FOREIGN KEY (id_etablissement) REFERENCES etablissements(id) ON DELETE CASCADE,
     FOREIGN KEY (id_produit) REFERENCES produits(id)
 );
+
+-- ============================================================
+-- MODULE SCRAPING & ENRICHISSEMENT
+-- ============================================================
+
+-- Table des sources à scraper (Sites web des marques)
+CREATE TABLE sources_scraping (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    id_marque INT, -- La marque concernée (ex: Diptyque)
+    url_source VARCHAR(500), -- L'URL à scraper (ex: https://www.diptyqueparis.com/fr/fr/nos-boutiques)
+    type_source VARCHAR(50), -- Site officiel, Annuaire, Google Maps, Réseau social
+    frequence_scraping VARCHAR(50), -- Quotidien, Hebdomadaire, Mensuel
+    derniere_execution DATETIME,
+    statut VARCHAR(50) DEFAULT 'Actif', -- Actif, En pause, Erreur
+    FOREIGN KEY (id_marque) REFERENCES marques(id) ON DELETE CASCADE
+);
+
+-- Table des résultats bruts du scraping (Avant validation)
+CREATE TABLE resultats_scraping (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    id_source INT,
+    date_scraping DATETIME DEFAULT CURRENT_TIMESTAMP,
+    nom_detecte VARCHAR(255), -- Le nom du magasin détecté
+    adresse_detectee TEXT,
+    ville_detectee VARCHAR(100),
+    code_postal_detecte VARCHAR(10),
+    pays_detecte VARCHAR(100),
+    telephone_detecte VARCHAR(20),
+    site_web_detecte VARCHAR(255),
+    marques_detectees TEXT, -- Liste des marques trouvées sur la page (format JSON)
+    statut_validation VARCHAR(50) DEFAULT 'En attente', -- En attente, Validé, Rejeté, Doublon
+    id_etablissement_cree INT NULL, -- Si validé, lien vers l'établissement créé
+    FOREIGN KEY (id_source) REFERENCES sources_scraping(id) ON DELETE CASCADE,
+    FOREIGN KEY (id_etablissement_cree) REFERENCES etablissements(id) ON DELETE SET NULL
+);
+
+-- Table des logs de scraping (Pour le suivi technique)
+CREATE TABLE logs_scraping (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    id_source INT,
+    date_execution DATETIME DEFAULT CURRENT_TIMESTAMP,
+    statut VARCHAR(50), -- Succès, Échec, Partiel
+    nb_resultats INT, -- Nombre de résultats trouvés
+    message_erreur TEXT, -- Si échec, message d'erreur
+    duree_execution INT, -- Durée en secondes
+    FOREIGN KEY (id_source) REFERENCES sources_scraping(id) ON DELETE CASCADE
+);
+
+-- Table des mots-clés de matching (Pour le scoring automatique)
+CREATE TABLE mots_cles_matching (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    mot_cle VARCHAR(255), -- Ex: "Diptyque", "Trudon", "Santa Maria Novella"
+    id_marque INT NULL, -- Lien vers la marque si applicable
+    type_mot_cle VARCHAR(50), -- Marque, Type de magasin, Produit
+    poids INT DEFAULT 1, -- Poids pour le calcul du ranking
+    actif BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (id_marque) REFERENCES marques(id) ON DELETE CASCADE
+);
+
+-- Table de l'historique des détections (Pour suivre l'évolution)
+CREATE TABLE historique_detections (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    id_etablissement INT,
+    id_marque INT,
+    date_detection DATETIME DEFAULT CURRENT_TIMESTAMP,
+    source_detection VARCHAR(50), -- Scraping, Manuel, API
+    id_resultat_scraping INT NULL,
+    FOREIGN KEY (id_etablissement) REFERENCES etablissements(id) ON DELETE CASCADE,
+    FOREIGN KEY (id_marque) REFERENCES marques(id) ON DELETE CASCADE,
+    FOREIGN KEY (id_resultat_scraping) REFERENCES resultats_scraping(id) ON DELETE SET NULL
+);
